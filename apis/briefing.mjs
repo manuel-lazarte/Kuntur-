@@ -1,54 +1,49 @@
 #!/usr/bin/env node
 
-// Crucix Master Orchestrator — runs all intelligence sources in parallel
-// Outputs structured JSON for Claude to synthesize into actionable briefing
+// Kuntur Master Orchestrator — threat intelligence sources in parallel
+// Specialized focus: cyber threats, attack events, Bolivia monitoring
+// All sources return AttackEvent format (or compatible for recycled sources)
 
 import './utils/env.mjs'; // Load API keys from .env
 import { pathToFileURL } from 'node:url';
+import { registerCall } from './utils/api-monitor.mjs';
 
-// === Tier 1: Core OSINT & Geopolitical ===
-import { briefing as gdelt } from './sources/gdelt.mjs';
-import { briefing as opensky } from './sources/opensky.mjs';
-import { briefing as firms } from './sources/firms.mjs';
-import { briefing as ships } from './sources/ships.mjs';
-import { briefing as safecast } from './sources/safecast.mjs';
-import { briefing as acled } from './sources/acled.mjs';
-import { briefing as reliefweb } from './sources/reliefweb.mjs';
-import { briefing as who } from './sources/who.mjs';
-import { briefing as ofac } from './sources/ofac.mjs';
-import { briefing as opensanctions } from './sources/opensanctions.mjs';
-import { briefing as adsb } from './sources/adsb.mjs';
+// === Threat Intel Sources (Core) ===
+import { briefing as demoReplay } from './sources/demo-replay.mjs';
+import { briefing as tpot } from './sources/tpot.mjs';
+import { briefing as abuseipdb } from './sources/abuseipdb.mjs';
+import { briefing as greynoise } from './sources/greynoise.mjs';
+import { briefing as otx } from './sources/otx.mjs';
+import { briefing as shodan } from './sources/shodan.mjs';
 
-// === Tier 2: Economic & Financial ===
-import { briefing as fred } from './sources/fred.mjs';
-import { briefing as treasury } from './sources/treasury.mjs';
-import { briefing as bls } from './sources/bls.mjs';
-import { briefing as eia } from './sources/eia.mjs';
-import { briefing as gscpi } from './sources/gscpi.mjs';
-import { briefing as usaspending } from './sources/usaspending.mjs';
-import { briefing as comtrade } from './sources/comtrade.mjs';
-
-// === Tier 3: Weather, Environment, Technology, Social ===
-import { briefing as noaa } from './sources/noaa.mjs';
-import { briefing as epa } from './sources/epa.mjs';
-import { briefing as patents } from './sources/patents.mjs';
-import { briefing as bluesky } from './sources/bluesky.mjs';
-import { briefing as reddit } from './sources/reddit.mjs';
-import { briefing as telegram } from './sources/telegram.mjs';
-import { briefing as kiwisdr } from './sources/kiwisdr.mjs';
-
-// === Tier 4: Space & Satellites ===
-import { briefing as space } from './sources/space.mjs';
-
-// === Tier 5: Live Market Data ===
-import { briefing as yfinance } from './sources/yfinance.mjs';
-
-// === Tier 6: Cyber & Infrastructure ===
+// === Context Sources (Recycled) ===
 import { briefing as cisaKev } from './sources/cisa-kev.mjs';
 import { briefing as cloudflareRadar } from './sources/cloudflare-radar.mjs';
+import { briefing as who } from './sources/who.mjs';
+import { briefing as noaa } from './sources/noaa.mjs';
 
 const SOURCE_TIMEOUT_MS = 30_000; // 30s max per individual source
 
+/**
+ * Mapping de fuentes a IDs de API para registro de llamadas
+ */
+const SOURCE_TO_API_ID = {
+  'AbuseIPDB': 'abuseipdb',
+  'GreyNoise': 'greynoise',
+  'OTX': 'otx',
+  'Shodan': 'shodan',
+  'T-Pot': 'tpot',
+  'DemoReplay': null,  // Demo no usa API real
+  'CISA-KEV': 'cisa',
+  'Cloudflare-Radar': null,  // No requiere API key
+  'WHO': null,  // No requiere API key
+  'NOAA': null,  // No requiere API key
+};
+
+/**
+ * Ejecuta una fuente individual con timeout y manejo de errores
+ * Registra las llamadas a APIs cuando la fuente retorna datos exitosamente
+ */
 export async function runSource(name, fn, ...args) {
   const start = Date.now();
   let timer;
@@ -58,6 +53,33 @@ export async function runSource(name, fn, ...args) {
       timer = setTimeout(() => reject(new Error(`Source ${name} timed out after ${SOURCE_TIMEOUT_MS / 1000}s`)), SOURCE_TIMEOUT_MS);
     });
     const data = await Promise.race([dataPromise, timeoutPromise]);
+
+    // Registrar llamada a API si la fuente está configurada y retornó datos
+    const apiId = SOURCE_TO_API_ID[name];
+    if (apiId && data && data.configured !== false) {
+      try {
+        // Estimar número de llamadas basado en la cantidad de eventos retornados
+        // Para AbuseIPDB: cada evento es una llamada a la API
+        // Para GreyNoise: 1 llamada por solicitud
+        // Para OTX: 1 llamada por solicitud
+        // Para Shodan: cada evento es una llamada
+        let callsCount = 1;
+        if (name === 'AbuseIPDB' && data.events) {
+          callsCount = data.events.length;
+        } else if (name === 'Shodan' && data.events) {
+          callsCount = data.events.length;
+        }
+
+        // Registrar cada llamada
+        for (let i = 0; i < callsCount; i++) {
+          registerCall(apiId);
+        }
+        console.error(`[API Monitor] Registered ${callsCount} call(s) for ${apiId} (${name})`);
+      } catch (err) {
+        console.error(`[API Monitor] Failed to register call for ${name}:`, err.message);
+      }
+    }
+
     return { name, status: 'ok', durationMs: Date.now() - start, data };
   } catch (e) {
     return { name, status: 'error', durationMs: Date.now() - start, error: e.message };
@@ -66,69 +88,216 @@ export async function runSource(name, fn, ...args) {
   }
 }
 
+/**
+ * Calcula estadísticas agregadas de todos los eventos de ataque
+ */
+function calculateAttackEventStats(sources) {
+  const allEvents = [];
+  const boliviaEvents = [];
+  const eventsByType = {};
+  const eventsBySeverity = {};
+  const sourceStats = {};
+
+  sources.filter(s => s.status === 'ok' && s.data?.events).forEach(s => {
+    const events = s.data.events || [];
+    sourceStats[s.name] = events.length;
+
+    events.forEach(event => {
+      allEvents.push(event);
+
+      // Contar eventos que involucran Bolivia
+      if (event.involves_bolivia) {
+        boliviaEvents.push(event);
+      }
+
+      // Agrupar por tipo de ataque
+      const attackType = event.attack_type || 'unknown';
+      eventsByType[attackType] = (eventsByType[attackType] || 0) + 1;
+
+      // Agrupar por severidad
+      const severity = event.severity || 'unknown';
+      eventsBySeverity[severity] = (eventsBySeverity[severity] || 0) + 1;
+    });
+  });
+
+  return {
+    total_events: allEvents.length,
+    bolivia_events: boliviaEvents.length,
+    by_attack_type: eventsByType,
+    by_severity: eventsBySeverity,
+    by_source: sourceStats,
+  };
+}
+
+/**
+ * Calcula estadísticas de fuentes contextuales (CISA-KEV, Cloudflare, etc.)
+ */
+function calculateContextStats(sources) {
+  const stats = {};
+
+  sources.filter(s => s.status === 'ok').forEach(s => {
+    if (!s.data) return;
+
+    switch (s.name) {
+      case 'CISA-KEV':
+        stats.cisa_vulnerabilities = s.data.summary?.totalInCatalog || 0;
+        stats.cisa_recent_additions = s.data.summary?.recentAdditions || 0;
+        break;
+      case 'Cloudflare-Radar':
+        stats.cloudflare_outages = s.data.outages?.total || 0;
+        stats.cloudflare_active_outages = s.data.outages?.active || 0;
+        break;
+      case 'WHO':
+        stats.who_outbreaks = s.data.diseaseOutbreakNews?.length || 0;
+        break;
+      case 'NOAA/NWS':
+        stats.noaa_severe_alerts = s.data.totalSevereAlerts || 0;
+        break;
+    }
+  });
+
+  return stats;
+}
+
+/**
+ * Genera señales de inteligencia a partir de los datos agregados
+ */
+function generateIntelligenceSignals(attackStats, contextStats, sources) {
+  const signals = [];
+
+  // Señales de amenazas críticas
+  if (attackStats.by_severity.critical > 0) {
+    signals.push({
+      severity: 'critical',
+      title: 'Critical Threats Detected',
+      description: `${attackStats.by_severity.critical} critical attack events detected across all sources`,
+    });
+  }
+
+  // Señales de Bolivia
+  if (attackStats.bolivia_events > 0) {
+    signals.push({
+      severity: attackStats.bolivia_events > 5 ? 'high' : 'medium',
+      title: 'Bolivia-Related Threat Activity',
+      description: `${attackStats.bolivia_events} attack events involving Bolivia detected`,
+    });
+  }
+
+  // Señales de CISA-KEV
+  if (contextStats.cisa_recent_additions > 5) {
+    signals.push({
+      severity: 'high',
+      title: 'Elevated Vulnerability Activity',
+      description: `${contextStats.cisa_recent_additions} new actively exploited CVEs added in last 30 days`,
+    });
+  }
+
+  // Señales de ransomware
+  const cisaSource = sources.find(s => s.name === 'CISA-KEV' && s.status === 'ok');
+  if (cisaSource?.data?.signals) {
+    const ransomwareSignal = cisaSource.data.signals.find(s => s.severity === 'critical');
+    if (ransomwareSignal) {
+      signals.push({
+        severity: 'critical',
+        title: 'Active Ransomware Campaigns',
+        description: ransomwareSignal.signal,
+      });
+    }
+  }
+
+  // Señales de internet outages
+  if (contextStats.cloudflare_active_outages > 0) {
+    signals.push({
+      severity: 'medium',
+      title: 'Active Internet Outages',
+      description: `${contextStats.cloudflare_active_outages} active internet outages detected globally`,
+    });
+  }
+
+  // Señales de brotes de enfermedades
+  if (contextStats.who_outbreaks > 3) {
+    signals.push({
+      severity: 'medium',
+      title: 'Elevated Disease Outbreak Activity',
+      description: `${contextStats.who_outbreaks} disease outbreak news items in last 30 days`,
+    });
+  }
+
+  // Señales de clima severo
+  if (contextStats.noaa_severe_alerts > 10) {
+    signals.push({
+      severity: 'high',
+      title: 'Severe Weather Events',
+      description: `${contextStats.noaa_severe_alerts} severe weather alerts active across US`,
+    });
+  }
+
+  return signals;
+}
+
+/**
+ * Briefing completo - ejecuta todas las fuentes en paralelo
+ */
 export async function fullBriefing() {
-  console.error('[Crucix] Starting intelligence sweep — 29 sources...');
+  console.error('[Kuntur] Starting threat intelligence sweep — 10 sources...');
   const start = Date.now();
 
   const allPromises = [
-    // Tier 1: Core OSINT & Geopolitical
-    runSource('GDELT', gdelt),
-    runSource('OpenSky', opensky),
-    runSource('FIRMS', firms),
-    runSource('Maritime', ships),
-    runSource('Safecast', safecast),
-    runSource('ACLED', acled),
-    runSource('ReliefWeb', reliefweb),
-    runSource('WHO', who),
-    runSource('OFAC', ofac),
-    runSource('OpenSanctions', opensanctions),
-    runSource('ADS-B', adsb),
+    // === Threat Intel (Priority) ===
+    runSource('DemoReplay', demoReplay),
+    runSource('T-Pot', tpot),
+    runSource('AbuseIPDB', abuseipdb),
+    runSource('GreyNoise', greynoise),
+    runSource('OTX', otx),
+    runSource('Shodan', shodan),
 
-    // Tier 2: Economic & Financial
-    runSource('FRED', fred, process.env.FRED_API_KEY),
-    runSource('Treasury', treasury),
-    runSource('BLS', bls, process.env.BLS_API_KEY),
-    runSource('EIA', eia, process.env.EIA_API_KEY),
-    runSource('GSCPI', gscpi),
-    runSource('USAspending', usaspending),
-    runSource('Comtrade', comtrade),
-
-    // Tier 3: Weather, Environment, Technology, Social
-    runSource('NOAA', noaa),
-    runSource('EPA', epa),
-    runSource('Patents', patents),
-    runSource('Bluesky', bluesky),
-    runSource('Reddit', reddit),
-    runSource('Telegram', telegram),
-    runSource('KiwiSDR', kiwisdr),
-
-    // Tier 4: Space & Satellites
-    runSource('Space', space),
-
-    // Tier 5: Live Market Data
-    runSource('YFinance', yfinance),
-
-    // Tier 6: Cyber & Infrastructure
+    // === Context Sources (Recycled) ===
     runSource('CISA-KEV', cisaKev),
     runSource('Cloudflare-Radar', cloudflareRadar),
+    runSource('WHO', who),
+    runSource('NOAA', noaa),
   ];
 
-  // Each runSource has its own 30s timeout, so allSettled will resolve
-  // within ~30s even if APIs hang. Global timeout is a safety net.
   const results = await Promise.allSettled(allPromises);
 
   const sources = results.map(r => r.status === 'fulfilled' ? r.value : { status: 'failed', error: r.reason?.message });
   const totalMs = Date.now() - start;
 
+  // Calcular estadísticas
+  const attackStats = calculateAttackEventStats(sources);
+  const contextStats = calculateContextStats(sources);
+  const signals = generateIntelligenceSignals(attackStats, contextStats, sources);
+
+  // Agrupar eventos de AttackEvents por fuente
+  const attackEventsBySource = {};
+  sources.filter(s => s.status === 'ok').forEach(s => {
+    if (s.data?.events) {
+      attackEventsBySource[s.name] = s.data.events;
+    }
+  });
+
+  // Identificar fuentes configuradas vs no configuradas
+  const configuredSources = sources.filter(s => s.status === 'ok' && (!s.data?.configured || s.data.configured !== false));
+  const unconfiguredSources = sources.filter(s => s.status === 'ok' && s.data?.configured === false);
+  const failedSources = sources.filter(s => s.status !== 'ok');
+
   const output = {
-    crucix: {
+    kuntur: {
       version: '2.0.0',
       timestamp: new Date().toISOString(),
       totalDurationMs: totalMs,
       sourcesQueried: sources.length,
       sourcesOk: sources.filter(s => s.status === 'ok').length,
-      sourcesFailed: sources.filter(s => s.status !== 'ok').length,
+      sourcesConfigured: configuredSources.length,
+      sourcesUnconfigured: unconfiguredSources.length,
+      sourcesFailed: failedSources.length,
     },
+    intelligence: {
+      signals,
+      attack_events: attackStats,
+      context_data: contextStats,
+    },
+    attackEvents: attackEventsBySource,
     sources: Object.fromEntries(
       sources.filter(s => s.status === 'ok').map(s => [s.name, s.data])
     ),
@@ -138,14 +307,95 @@ export async function fullBriefing() {
     ),
   };
 
-  console.error(`[Crucix] Sweep complete in ${totalMs}ms — ${output.crucix.sourcesOk}/${sources.length} sources returned data`);
+  console.error(`[Kuntur] Sweep complete in ${totalMs}ms — ${output.kuntur.sourcesOk}/${sources.length} sources returned data`);
+  console.error(`[Kuntur] ${configuredSources.length} configured, ${unconfiguredSources.length} need API keys, ${failedSources.length} failed`);
   return output;
+}
+
+/**
+ * Ejecuta solo las fuentes principales de threat intelligence
+ */
+export async function threatIntelBriefing() {
+  console.error('[Kuntur] Running threat intelligence only briefing...');
+  const start = Date.now();
+
+  const threatPromises = [
+    runSource('DemoReplay', demoReplay),
+    runSource('T-Pot', tpot),
+    runSource('AbuseIPDB', abuseipdb),
+    runSource('GreyNoise', greynoise),
+    runSource('OTX', otx),
+    runSource('Shodan', shodan),
+  ];
+
+  const results = await Promise.allSettled(threatPromises);
+  const sources = results.map(r => r.status === 'fulfilled' ? r.value : { status: 'failed', error: r.reason?.message });
+  const totalMs = Date.now() - start;
+
+  return {
+    kuntur: {
+      version: '2.0.0',
+      timestamp: new Date().toISOString(),
+      totalDurationMs: totalMs,
+      mode: 'threat-intel-only',
+      sourcesQueried: sources.length,
+      sourcesOk: sources.filter(s => s.status === 'ok').length,
+    },
+    sources: Object.fromEntries(
+      sources.filter(s => s.status === 'ok').map(s => [s.name, s.data])
+    ),
+    errors: sources.filter(s => s.status !== 'ok').map(s => ({ name: s.name, error: s.error })),
+  };
+}
+
+/**
+ * Ejecuta solo las fuentes contextuales
+ */
+export async function contextBriefing() {
+  console.error('[Kuntur] Running context briefing...');
+  const start = Date.now();
+
+  const contextPromises = [
+    runSource('CISA-KEV', cisaKev),
+    runSource('Cloudflare-Radar', cloudflareRadar),
+    runSource('WHO', who),
+    runSource('NOAA', noaa),
+  ];
+
+  const results = await Promise.allSettled(contextPromises);
+  const sources = results.map(r => r.status === 'fulfilled' ? r.value : { status: 'failed', error: r.reason?.message });
+  const totalMs = Date.now() - start;
+
+  return {
+    kuntur: {
+      version: '2.0.0',
+      timestamp: new Date().toISOString(),
+      totalDurationMs: totalMs,
+      mode: 'context-only',
+      sourcesQueried: sources.length,
+      sourcesOk: sources.filter(s => s.status === 'ok').length,
+    },
+    sources: Object.fromEntries(
+      sources.filter(s => s.status === 'ok').map(s => [s.name, s.data])
+    ),
+    errors: sources.filter(s => s.status !== 'ok').map(s => ({ name: s.name, error: s.error })),
+  };
 }
 
 // Run and output when executed directly
 const entryHref = process.argv[1] ? pathToFileURL(process.argv[1]).href : null;
 
 if (entryHref && import.meta.url === entryHref) {
-  const data = await fullBriefing();
+  const mode = process.argv[2] || 'full';
+
+  let data;
+  if (mode === 'threat') {
+    data = await threatIntelBriefing();
+  } else if (mode === 'context') {
+    data = await contextBriefing();
+  } else {
+    data = await fullBriefing();
+  }
+
   console.log(JSON.stringify(data, null, 2));
 }

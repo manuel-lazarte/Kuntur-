@@ -1,21 +1,22 @@
 #!/usr/bin/env node
-// Crucix Intelligence Engine — Dev Server
-// Serves the Jarvis dashboard, runs sweep cycle, pushes live updates via SSE
+// Kuntur Intelligence Engine — Dev Server
+// Serves the dashboard, runs sweep cycle, pushes live updates via SSE
 
 import express from 'express';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
-import config from './crucix.config.mjs';
+import config from './kuntur.config.mjs';
 import { getLocale, currentLanguage, getSupportedLocales } from './lib/i18n.mjs';
 import { fullBriefing } from './apis/briefing.mjs';
-import { synthesize, generateIdeas } from './dashboard/inject.mjs';
+import { synthesizeKuntur } from './dashboard/kuntur-synth.mjs';
 import { MemoryManager } from './lib/delta/index.mjs';
 import { createLLMProvider } from './lib/llm/index.mjs';
 import { generateLLMIdeas } from './lib/llm/ideas.mjs';
 import { TelegramAlerter } from './lib/alerts/telegram.mjs';
 import { DiscordAlerter } from './lib/alerts/discord.mjs';
+import { analyzeUsage } from './apis/utils/api-monitor.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
@@ -43,9 +44,9 @@ const llmProvider = createLLMProvider(config.llm);
 const telegramAlerter = new TelegramAlerter(config.telegram);
 const discordAlerter = new DiscordAlerter(config.discord || {});
 
-if (llmProvider) console.log(`[Crucix] LLM enabled: ${llmProvider.name} (${llmProvider.model})`);
+if (llmProvider) console.log(`[Kuntur] LLM enabled: ${llmProvider.name} (${llmProvider.model})`);
 if (telegramAlerter.isConfigured) {
-  console.log('[Crucix] Telegram alerts enabled');
+  console.log('[Kuntur] Telegram alerts enabled');
 
   // ─── Two-Way Bot Commands ───────────────────────────────────────────────
 
@@ -78,7 +79,7 @@ if (telegramAlerter.isConfigured) {
   telegramAlerter.onCommand('/sweep', async () => {
     if (sweepInProgress) return '🔄 Sweep already in progress. Please wait.';
     // Fire and forget — don't block the bot response
-    runSweepCycle().catch(err => console.error('[Crucix] Manual sweep failed:', err.message));
+    runSweepCycle().catch(err => console.error('[Kuntur] Manual sweep failed:', err.message));
     return '🚀 Manual sweep triggered. You\'ll receive alerts if anything significant is detected.';
   });
 
@@ -136,7 +137,7 @@ if (telegramAlerter.isConfigured) {
   });
 
   telegramAlerter.onCommand('/portfolio', async () => {
-    return '📊 Portfolio integration requires Alpaca MCP connection.\nUse the Crucix dashboard or Claude agent for portfolio queries.';
+    return '📊 Portfolio integration requires Alpaca MCP connection.\nUse the Kuntur dashboard or Claude agent for portfolio queries.';
   });
 
   // Start polling for bot commands
@@ -145,7 +146,7 @@ if (telegramAlerter.isConfigured) {
 
 // === Discord Bot ===
 if (discordAlerter.isConfigured) {
-  console.log('[Crucix] Discord bot enabled');
+  console.log('[Kuntur] Discord bot enabled');
 
   // Reuse the same command handlers as Telegram (DRY)
   discordAlerter.onCommand('status', async () => {
@@ -175,7 +176,7 @@ if (discordAlerter.isConfigured) {
 
   discordAlerter.onCommand('sweep', async () => {
     if (sweepInProgress) return '🔄 Sweep already in progress. Please wait.';
-    runSweepCycle().catch(err => console.error('[Crucix] Manual sweep failed:', err.message));
+    runSweepCycle().catch(err => console.error('[Kuntur] Manual sweep failed:', err.message));
     return '🚀 Manual sweep triggered. You\'ll receive alerts if anything significant is detected.';
   });
 
@@ -223,12 +224,12 @@ if (discordAlerter.isConfigured) {
   });
 
   discordAlerter.onCommand('portfolio', async () => {
-    return '📊 Portfolio integration requires Alpaca MCP connection.\nUse the Crucix dashboard or Claude agent for portfolio queries.';
+    return '📊 Portfolio integration requires Alpaca MCP connection.\nUse the Kuntur dashboard or Claude agent for portfolio queries.';
   });
 
   // Start the Discord bot (non-blocking — connection happens async)
   discordAlerter.start().catch(err => {
-    console.error('[Crucix] Discord bot startup failed (non-fatal):', err.message);
+    console.error('[Kuntur] Discord bot startup failed (non-fatal):', err.message);
   });
 }
 
@@ -236,20 +237,12 @@ if (discordAlerter.isConfigured) {
 const app = express();
 app.use(express.static(join(ROOT, 'dashboard/public')));
 
-// Serve loading page until first sweep completes, then the dashboard with injected locale
+// Serve Kuntur dashboard
 app.get('/', (req, res) => {
   if (!currentData) {
     res.sendFile(join(ROOT, 'dashboard/public/loading.html'));
   } else {
-    const htmlPath = join(ROOT, 'dashboard/public/jarvis.html');
-    let html = readFileSync(htmlPath, 'utf-8');
-    
-    // Inject locale data into the HTML
-    const locale = getLocale();
-    const localeScript = `<script>window.__CRUCIX_LOCALE__ = ${JSON.stringify(locale).replace(/<\/script>/gi, '<\\/script>')};</script>`;
-    html = html.replace('</head>', `${localeScript}\n</head>`);
-    
-    res.type('html').send(html);
+    res.sendFile(join(ROOT, 'dashboard/public/kuntur.html'));
   }
 });
 
@@ -288,6 +281,41 @@ app.get('/api/locales', (req, res) => {
   });
 });
 
+// API: quota status for all threat intel APIs
+app.get('/api/quota', (req, res) => {
+  try {
+    const quotaData = analyzeUsage();
+    res.json(quotaData);
+  } catch (err) {
+    console.error('[Kuntur] Quota endpoint error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch quota data' });
+  }
+});
+
+// API: manual sweep trigger - check for new threats immediately
+app.post('/api/sweep', async (req, res) => {
+  if (sweepInProgress) {
+    return res.json({
+      status: 'already_running',
+      message: 'Sweep already in progress',
+      startedAt: sweepStartedAt,
+    });
+  }
+
+  console.log('[Kuntur] Manual sweep triggered via API');
+
+  // Start sweep in background
+  runSweepCycle().catch(err => {
+    console.error('[Kuntur] Manual sweep failed:', err.message);
+  });
+
+  res.json({
+    status: 'started',
+    message: 'Sweep started - results will be pushed via SSE',
+    startedAt: new Date().toISOString(),
+  });
+});
+
 // SSE: live updates
 app.get('/events', (req, res) => {
   res.writeHead(200, {
@@ -311,7 +339,7 @@ function broadcast(data) {
 // === Sweep Cycle ===
 async function runSweepCycle() {
   if (sweepInProgress) {
-    console.log('[Crucix] Sweep already in progress, skipping');
+    console.log('[Kuntur] Sweep already in progress, skipping');
     return;
   }
 
@@ -319,7 +347,7 @@ async function runSweepCycle() {
   sweepStartedAt = new Date().toISOString();
   broadcast({ type: 'sweep_start', timestamp: sweepStartedAt });
   console.log(`\n${'='.repeat(60)}`);
-  console.log(`[Crucix] Starting sweep at ${new Date().toLocaleTimeString()}`);
+  console.log(`[Kuntur] Starting sweep at ${new Date().toLocaleTimeString()}`);
   console.log(`${'='.repeat(60)}`);
 
   try {
@@ -330,74 +358,36 @@ async function runSweepCycle() {
     writeFileSync(join(RUNS_DIR, 'latest.json'), JSON.stringify(rawData, null, 2));
     lastSweepTime = new Date().toISOString();
 
-    // 3. Synthesize into dashboard format
-    console.log('[Crucix] Synthesizing dashboard data...');
-    const synthesized = await synthesize(rawData);
+    // 3. Synthesize into dashboard format (Kuntur)
+    console.log('[Kuntur] Synthesizing threat intelligence...');
+    const synthesized = await synthesizeKuntur(rawData);
 
     // 4. Delta computation + memory
     const delta = memory.addRun(synthesized);
     synthesized.delta = delta;
 
-    // 5. LLM-powered trade ideas (LLM-only feature) — isolated so failures don't kill sweep
-    if (llmProvider?.isConfigured) {
-      try {
-        console.log('[Crucix] Generating LLM trade ideas...');
-        const previousIdeas = memory.getLastRun()?.ideas || [];
-        const llmIdeas = await generateLLMIdeas(llmProvider, synthesized, delta, previousIdeas);
-        if (llmIdeas) {
-          synthesized.ideas = llmIdeas;
-          synthesized.ideasSource = 'llm';
-          console.log(`[Crucix] LLM generated ${llmIdeas.length} ideas`);
-        } else {
-          synthesized.ideas = [];
-          synthesized.ideasSource = 'llm-failed';
-        }
-      } catch (llmErr) {
-        console.error('[Crucix] LLM ideas failed (non-fatal):', llmErr.message);
-        synthesized.ideas = [];
-        synthesized.ideasSource = 'llm-failed';
-      }
-    } else {
-      synthesized.ideas = [];
-      synthesized.ideasSource = 'disabled';
-    }
+    // 5. Ideas (Kuntur: disabled for now, focusing on attack events)
+    synthesized.ideas = [];
+    synthesized.ideasSource = 'disabled';
 
-    // 6. Alert evaluation — Telegram + Discord (LLM with rule-based fallback, multi-tier, semantic dedup)
+    // 6. Alert evaluation — Telegram + Discord (Kuntur: simplified for now)
+    // TODO: Implement custom Kuntur alerts for Bolivia events
     if (delta?.summary?.totalChanges > 0) {
-      if (telegramAlerter.isConfigured) {
-        telegramAlerter.evaluateAndAlert(llmProvider, delta, memory).catch(err => {
-          console.error('[Crucix] Telegram alert error:', err.message);
-        });
-      }
-      if (discordAlerter.isConfigured) {
-        discordAlerter.evaluateAndAlert(llmProvider, delta, memory).catch(err => {
-          console.error('[Crucix] Discord alert error:', err.message);
-        });
-      }
+      // Future: alert on critical/high events involving Bolivia
     }
-
-    // 7. Post actionable ideas to Discord (HIGH confidence, short horizon, Kalshi-style)
-    if (discordAlerter.isConfigured && synthesized.ideas?.length > 0) {
-      discordAlerter.sendActionableIdeas(synthesized.ideas).catch(err => {
-        console.error('[Crucix] Discord idea alert error:', err.message);
-      });
-    }
-
-    // Prune old alerted signals
-    memory.pruneAlertedSignals();
 
     currentData = synthesized;
 
     // 6. Push to all connected browsers
     broadcast({ type: 'update', data: currentData });
 
-    console.log(`[Crucix] Sweep complete — ${currentData.meta.sourcesOk}/${currentData.meta.sourcesQueried} sources OK`);
-    console.log(`[Crucix] ${currentData.ideas.length} ideas (${synthesized.ideasSource}) | ${currentData.news.length} news | ${currentData.newsFeed.length} feed items`);
-    if (delta?.summary) console.log(`[Crucix] Delta: ${delta.summary.totalChanges} changes, ${delta.summary.criticalChanges} critical, direction: ${delta.summary.direction}`);
-    console.log(`[Crucix] Next sweep at ${new Date(Date.now() + config.refreshIntervalMinutes * 60000).toLocaleTimeString()}`);
+    console.log(`[Kuntur] Sweep complete — ${currentData.meta.sourcesOk}/${currentData.meta.sourcesQueried} sources OK`);
+    console.log(`[Kuntur] ${currentData.stats.total_events} attack events (${currentData.stats.bolivia_events} involving Bolivia)`);
+    if (delta?.summary) console.log(`[Kuntur] Delta: ${delta.summary.totalChanges} changes, ${delta.summary.criticalChanges} critical, direction: ${delta.summary.direction}`);
+    console.log(`[Kuntur] Next sweep at ${new Date(Date.now() + config.refreshIntervalMinutes * 60000).toLocaleTimeString()}`);
 
   } catch (err) {
-    console.error('[Crucix] Sweep failed:', err.message);
+    console.error('[Kuntur] Sweep failed:', err.message);
     broadcast({ type: 'sweep_error', error: err.message });
   } finally {
     sweepInProgress = false;
@@ -410,15 +400,14 @@ async function start() {
 
   console.log(`
   ╔══════════════════════════════════════════════╗
-  ║           CRUCIX INTELLIGENCE ENGINE         ║
-  ║          Local Palantir · 26 Sources         ║
+  ║          KUNTUR THREAT INTELLIGENCE          ║
+  ║     Cyber Threat Dashboard · Bolivia Focus  ║
   ╠══════════════════════════════════════════════╣
   ║  Dashboard:  http://localhost:${port}${' '.repeat(14 - String(port).length)}║
   ║  Health:     http://localhost:${port}/api/health${' '.repeat(4 - String(port).length)}║
   ║  Refresh:    Every ${config.refreshIntervalMinutes} min${' '.repeat(20 - String(config.refreshIntervalMinutes).length)}║
-  ║  LLM:        ${(config.llm.provider || 'disabled').padEnd(31)}║
-  ║  Telegram:   ${config.telegram.botToken ? 'enabled' : 'disabled'}${' '.repeat(config.telegram.botToken ? 24 : 23)}║
-  ║  Discord:    ${config.discord?.botToken ? 'enabled' : config.discord?.webhookUrl ? 'webhook only' : 'disabled'}${' '.repeat(config.discord?.botToken ? 24 : config.discord?.webhookUrl ? 20 : 23)}║
+  ║  Sources:    10 (6 threat intel + 4 context)  ║
+  ║  Demo Mode:  ${'Active (no API keys required)'.padEnd(25)}║
   ╚══════════════════════════════════════════════╝
   `);
 
@@ -426,19 +415,19 @@ async function start() {
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-      console.error(`\n[Crucix] FATAL: Port ${port} is already in use!`);
-      console.error(`[Crucix] A previous Crucix instance may still be running.`);
-      console.error(`[Crucix] Fix:  taskkill /F /IM node.exe   (Windows)`);
-      console.error(`[Crucix]       kill $(lsof -ti:${port})   (macOS/Linux)`);
-      console.error(`[Crucix] Or change PORT in .env\n`);
+      console.error(`\n[Kuntur] FATAL: Port ${port} is already in use!`);
+      console.error(`[Kuntur] A previous Crucix instance may still be running.`);
+      console.error(`[Kuntur] Fix:  taskkill /F /IM node.exe   (Windows)`);
+      console.error(`[Kuntur]       kill $(lsof -ti:${port})   (macOS/Linux)`);
+      console.error(`[Kuntur] Or change PORT in .env\n`);
     } else {
-      console.error(`[Crucix] Server error:`, err.stack || err.message);
+      console.error(`[Kuntur] Server error:`, err.stack || err.message);
     }
     process.exit(1);
   });
 
   server.on('listening', async () => {
-    console.log(`[Crucix] Server running on http://localhost:${port}`);
+    console.log(`[Kuntur] Server running on http://localhost:${port}`);
 
     // Auto-open browser
     // NOTE: On Windows, `start` in PowerShell is an alias for Start-Service, not cmd's start.
@@ -446,24 +435,24 @@ async function start() {
     const openCmd = process.platform === 'win32' ? 'cmd /c start ""' :
                     process.platform === 'darwin' ? 'open' : 'xdg-open';
     exec(`${openCmd} "http://localhost:${port}"`, (err) => {
-      if (err) console.log('[Crucix] Could not auto-open browser:', err.message);
+      if (err) console.log('[Kuntur] Could not auto-open browser:', err.message);
     });
 
     // Try to load existing data first for instant display (await so dashboard shows immediately)
     try {
       const existing = JSON.parse(readFileSync(join(RUNS_DIR, 'latest.json'), 'utf8'));
-      const data = await synthesize(existing);
+      const data = await synthesizeKuntur(existing);
       currentData = data;
-      console.log('[Crucix] Loaded existing data from runs/latest.json — dashboard ready instantly');
+      console.log('[Kuntur] Loaded existing data from runs/latest.json — dashboard ready instantly');
       broadcast({ type: 'update', data: currentData });
     } catch {
-      console.log('[Crucix] No existing data found — first sweep required');
+      console.log('[Kuntur] No existing data found — first sweep required');
     }
 
     // Run first sweep (refreshes data in background)
-    console.log('[Crucix] Running initial sweep...');
+    console.log('[Kuntur] Running initial sweep...');
     runSweepCycle().catch(err => {
-      console.error('[Crucix] Initial sweep failed:', err.message || err);
+      console.error('[Kuntur] Initial sweep failed:', err.message || err);
     });
 
     // Schedule recurring sweeps
@@ -473,13 +462,13 @@ async function start() {
 
 // Graceful error handling — log full stack traces for diagnosis
 process.on('unhandledRejection', (err) => {
-  console.error('[Crucix] Unhandled rejection:', err?.stack || err?.message || err);
+  console.error('[Kuntur] Unhandled rejection:', err?.stack || err?.message || err);
 });
 process.on('uncaughtException', (err) => {
-  console.error('[Crucix] Uncaught exception:', err?.stack || err?.message || err);
+  console.error('[Kuntur] Uncaught exception:', err?.stack || err?.message || err);
 });
 
 start().catch(err => {
-  console.error('[Crucix] FATAL — Server failed to start:', err?.stack || err?.message || err);
+  console.error('[Kuntur] FATAL — Server failed to start:', err?.stack || err?.message || err);
   process.exit(1);
 });

@@ -1,4 +1,4 @@
-// Crucix Configuration — all settings with env var overrides
+// Kuntur Configuration — all settings with env var overrides
 
 import "./apis/utils/env.mjs"; // Load .env first
 

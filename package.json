@@ -1,7 +1,7 @@
 {
-  "name": "crucix",
+  "name": "kuntur",
   "version": "2.0.0",
-  "description": "Local intelligence engine - 27 OSINT sources, live dashboard, public demo at crucix.live, auto-refresh, optional LLM layer.",
+  "description": "Local threat intelligence engine - OSINT sources, live dashboard, auto-refresh, optional LLM layer.",
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
@@ -12,7 +12,17 @@
     "brief:save": "node apis/save-briefing.mjs",
     "diag": "node diag.mjs",
     "clean": "node scripts/clean.mjs",
-    "fresh-start": "npm run clean && npm start"
+    "fresh-start": "npm run clean && npm start",
+    "kuntur": "node apis/briefing.mjs",
+    "kuntur:threat": "node apis/briefing.mjs threat",
+    "kuntur:context": "node apis/briefing.mjs context",
+    "kuntur:demo": "node apis/sources/demo-replay.mjs",
+    "kuntur:cisa": "node apis/sources/cisa-kev.mjs",
+    "kuntur:abuseipdb": "node apis/sources/abuseipdb.mjs",
+    "kuntur:greynoise": "node apis/sources/greynoise.mjs",
+    "kuntur:otx": "node apis/sources/otx.mjs",
+    "kuntur:shodan": "node apis/sources/shodan.mjs",
+    "kuntur:tpot": "node apis/sources/tpot.mjs"
   },
   "keywords": [
     "osint",
@@ -20,14 +30,16 @@
     "dashboard",
     "geopolitical"
   ],
-  "author": "Crucix",
+  "author": "Kuntur",
   "license": "AGPL-3.0-only",
   "engines": {
     "node": ">=22",
     "npm": ">=10"
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "ajv": "^8.17.1",
+    "@maxmind/geoip2-node": "^5.0.0"
   },
   "optionalDependencies": {
     "discord.js": "^14.25.1"  },

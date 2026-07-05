@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# API state tracking (runtime data)
+.api-state.json
+
 # Environment (contains API keys)
 .env
 apis/.env

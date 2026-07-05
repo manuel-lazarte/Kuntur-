@@ -1,561 +1,465 @@
-<div align="center">
+# Kuntur Threat Intelligence Dashboard
 
-# Crucix
+![Build Status](https://img.shields.io/github/actions/workflow/status/yourusername/kuntur/ci.yml?branch=main)
+![License](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)
+![Version](https://img.shields.io/badge/Version-2.0.0-green.svg)
+![Node](https://img.shields.io/badge/Node.js-%3E%3D22.0.0-brightgreen)
 
-**Your own intelligence terminal. 27 sources. One command. Zero cloud.**
+> Your own cyber threat intelligence terminal. 10 sources. One command. Zero cloud.
 
-## [Visit The Live Site: crucix.live](https://www.crucix.live/)
+Kuntur is a **Cyber Threat Intelligence Dashboard** that monitors cybersecurity threats in real-time, with special focus on Bolivia. It integrates multiple threat intelligence sources to provide a complete view of the threat landscape, featuring a live web dashboard for real-time monitoring.
 
-[![Live Website](https://img.shields.io/badge/live-crucix.live-00d4ff?style=for-the-badge)](https://www.crucix.live/)
-[![Open Demo](https://img.shields.io/badge/open-live%20dashboard-0b1220?style=for-the-badge&logo=googlechrome&logoColor=white)](https://www.crucix.live/)
+![Kuntur Dashboard](docs/images/dashboard-overview.png)
 
-[![Node.js 22+](https://img.shields.io/badge/node-22%2B-brightgreen)](#quick-start)
-[![License: AGPL v3](https://img.shields.io/badge/license-AGPLv3-blue.svg)](LICENSE)
-[![Dependencies](https://img.shields.io/badge/dependencies-1%20(express)-orange)](#architecture)
-[![Sources](https://img.shields.io/badge/OSINT%20sources-27-cyan)](#data-sources-27)
-[![Docker](https://img.shields.io/badge/docker-ready-blue?logo=docker)](#docker)
+## Features
 
-**Enter The Signal Network**
+### Core Capabilities
 
-[![Signal Wire](https://img.shields.io/badge/Signal%20Wire-%40crucixmonitor-111111?style=for-the-badge&logo=x&logoColor=white)](https://x.com/crucixmonitor)
-[![Ops Room](https://img.shields.io/badge/Ops%20Room-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/ChVy7SF4)
+- **10 Intelligence Sources** - Threat intelligence and contextual data sources
+- **Live Dashboard** - Real-time web interface for monitoring threats
+- **Parallel Execution** - All sources queried simultaneously for speed
+- **Robust Error Handling** - Single source failure doesn't stop the briefing
+- **Bolivia Focus** - Detection of threats involving Bolivia
+- **Zero Cloud Dependencies** - Everything runs locally
+- **Structured JSON Output** - Easy integration with other systems
+- **MITRE ATT&CK Mapping** - Attack patterns mapped to MITRE techniques
+- **RESTful API** - Programmatic access to intelligence data
+- **Auto-refresh** - Configurable automatic updates
 
-![Crucix Dashboard](docs/dashboard.png)
+### Dashboard Features
 
-<details>
-<summary>More screenshots</summary>
-
-| Boot Sequence | World Map |
-|:---:|:---:|
-| ![Boot](docs/boot.png) | ![Map](docs/map.png) |
-
-| 3D Globe View |
-|:---:|
-| ![Globe](docs/globe.png) |
-
-</details>
-
-</div>
-
-> **Live website:** [https://www.crucix.live/](https://www.crucix.live/)
-> Explore the public demo first, then clone the repo to run Crucix locally.
-
-Crucix pulls satellite fire detection, flight tracking, radiation monitoring, satellite constellation tracking, economic indicators, live market prices, conflict data, sanctions lists, and social sentiment from 27 open-source intelligence feeds — in parallel, every 15 minutes — and renders everything on a single self-contained Jarvis-style dashboard.
-
-Hook it up to an LLM and it becomes a **two-way intelligence assistant** — pushing multi-tier alerts to Telegram and Discord when something meaningful changes, responding to commands like `/brief` and `/sweep` from your phone, and generating actionable trade ideas grounded in real cross-domain data. Your own analyst that watches the world while you sleep.
-
-Try the live demo first at [https://www.crucix.live/](https://www.crucix.live/), then clone the repo when you want the full local stack.
-
-No cloud. No telemetry. No subscriptions. Just `node server.mjs` and you're running.
-
-## Token / Asset Warning
-
-> [!WARNING]
-> **Crucix has not launched any official token, coin, NFT, airdrop, presale, or other blockchain-based asset.**
-> Any token or digital asset using the Crucix name, logo, or branding is not affiliated with or endorsed by Crucix.
-> Do not buy it, promote it, connect a wallet to claim it, sign transactions, or send funds based on third-party posts, DMs, or websites.
-
----
-
-## Why This Exists
-
-Most of the world's real-time intelligence — satellite imagery, radiation levels, conflict events, economic indicators, flight tracking, maritime activity — is publicly available. It's just scattered across dozens of government APIs, research institutions, and open data feeds that nobody has time to check individually.
-
-Crucix brings it all into one place. Not behind a paywall, not locked in an enterprise platform, not requiring a security clearance. Just open data, aggregated and cross-correlated on your own machine, updated every 15 minutes.
-
-It was built for anyone who wants to understand what's actually happening in the world right now — researchers, journalists, traders, OSINT analysts, or just curious people who believe access to information shouldn't depend on your budget.
-
----
-
-## Quick Start
-
-```bash
-# 1. Clone the repo
-git clone https://github.com/calesthio/Crucix.git
-cd Crucix
-
-# 2. Install dependencies (just Express)
-npm install
-
-# 3. Copy env template and add your API keys (see below)
-cp .env.example .env
-
-# 4. Start the dashboard
-npm run dev
-```
-
-> **If `npm run dev` fails silently** (exits with no output), run Node directly instead:
-> ```bash
-> node --trace-warnings server.mjs
-> ```
-> This bypasses npm's script runner, which can swallow errors on some systems (particularly PowerShell on Windows). You can also run `node diag.mjs` to diagnose the exact issue — it checks your Node version, tests each module import individually, and verifies port availability. See [Troubleshooting](#troubleshooting) for more.
-
-The dashboard opens automatically at `http://localhost:3117` and immediately begins its first intelligence sweep. This initial sweep queries all 27 sources in parallel and typically takes 30–60 seconds — the dashboard will appear empty until the sweep completes and pushes the first data update. After that, it auto-refreshes every 15 minutes via SSE (Server-Sent Events). No manual page refresh needed.
-
-**Requirements:** Node.js 22+ (uses native `fetch`, top-level `await`, ESM)
-
-### Docker
-
-```bash
-git clone https://github.com/calesthio/Crucix.git
-cd Crucix
-cp .env.example .env    # add your API keys
-docker compose up -d
-```
-
-Dashboard at `http://localhost:3117`. Sweep data persists in `./runs/` via volume mount. Includes a health check endpoint.
-
----
-
-## What You Get
-
-### Live Dashboard
-A self-contained Jarvis-style HUD with:
-- **3D WebGL globe** (Globe.gl) with atmosphere glow, star field, and smooth rotation — plus a classic flat map toggle
-- **9 marker types** across both views: fire detections, air traffic, radiation sites, maritime chokepoints, SDR receivers, OSINT events, health alerts, geolocated news, conflict events
-- **Animated 3D flight corridor arcs** between air traffic hotspots and global hubs
-- **Region filters** (World, Americas, Europe, Middle East, Asia Pacific, Africa) — rotates the globe or zooms the flat map
-- **Live market data** — indexes, crypto, energy, commodities via Yahoo Finance (no API key needed)
-- **Risk gauges** — VIX, high-yield spread, supply chain pressure index
-- **OSINT feed** — English-language posts from 17 Telegram intelligence channels (expandable)
-- **News ticker** — merged RSS + GDELT headlines + Telegram posts, auto-scrolling
-- **Sweep delta** — live panel showing what changed since last sweep (new signals, escalations, de-escalations with severity)
-- **Cross-source signals** — correlated intelligence across satellite, economic, conflict, and social domains
-- **Nuclear watch** — real-time radiation readings from Safecast + EPA RadNet
-- **Space watch** — CelesTrak satellite tracking: recent launches, ISS, military constellations, Starlink/OneWeb counts
-- **Leverageable ideas** — AI-generated trade ideas (with LLM) or signal-correlated ideas (without)
-
-### Performance Modes
-The `VISUALS FULL` / `VISUALS LITE` button in the top bar only changes rendering behavior - it does **not** remove data sources or reduce sweep coverage.
-
-When you switch to **VISUALS LITE**, the dashboard:
-- Disables decorative background effects such as the radial/grid overlays and scanlines
-- Removes expensive blur/backdrop-filter effects on panels and overlays
-- Stops non-essential animations like the logo ring blink, conflict rings, and corridor flow effects
-- Disables globe auto-rotation and turns off animated flight-arc dashes
-- Converts the horizontal news ticker and OSINT stream into static, scrollable lists instead of continuously animated marquees
-
-Mobile-specific behavior:
-- On mobile, `VISUALS LITE` also forces the dashboard into **flat map mode** if you are currently on the globe
-- Future mobile loads will continue to start flat while low-perf mode is enabled
-
-The preference is saved in browser local storage, so the UI will remember your last setting.
-
-### Auto-Refresh
-The server runs a sweep cycle every 15 minutes (configurable). Each cycle:
-1. Queries all 27 sources in parallel (~30s)
-2. Synthesizes raw data into dashboard format
-3. Computes delta from previous run (what changed, escalated, de-escalated) — visible in the **Sweep Delta** panel on the dashboard
-4. Generates LLM trade ideas (if configured)
-5. Evaluates breaking news alerts — multi-tier (FLASH / PRIORITY / ROUTINE) with semantic dedup. Sends to Telegram and/or Discord if configured. Works with LLM evaluation or falls back to rule-based alerting when LLM is unavailable.
-6. Pushes update to all connected browsers via SSE
-
-### Telegram Bot (Two-Way)
-Crucix doubles as an interactive Telegram bot. Beyond sending alerts, it responds to commands directly from your chat:
-
-| Command | What It Does |
-|---------|-------------|
-| `/status` | System health, last sweep time, source status, LLM status |
-| `/sweep` | Trigger a manual sweep cycle |
-| `/brief` | Compact text summary of the latest intelligence (direction, key metrics, top OSINT) |
-| `/portfolio` | Portfolio status (if Alpaca connected) |
-| `/alerts` | Recent alert history with tiers |
-| `/mute` / `/mute 2h` | Silence alerts for 1h (or custom duration) |
-| `/unmute` | Resume alerts |
-| `/help` | Show all available commands |
-
-This requires `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`. The bot polls for messages every 5 seconds (configurable via `TELEGRAM_POLL_INTERVAL`).
-
-### Discord Bot (Two-Way)
-
-Crucix also supports Discord as a full-featured bot with slash commands and rich embed alerts. It mirrors the Telegram bot's capabilities with Discord-native formatting.
-
-| Command | What It Does |
-|---------|-------------|
-| `/status` | System health, last sweep time, source status, LLM status |
-| `/sweep` | Trigger a manual sweep cycle |
-| `/brief` | Compact text summary of the latest intelligence |
-| `/portfolio` | Portfolio status (if Alpaca connected) |
-
-Alerts are delivered as rich embeds with color-coded sidebars: red for FLASH, yellow for PRIORITY, blue for ROUTINE. Each embed includes signal details, confidence scores, and cross-domain correlations.
-
-**Setup requires:** `DISCORD_BOT_TOKEN`, `DISCORD_CHANNEL_ID`, and optionally `DISCORD_GUILD_ID` for instant slash command registration. See [API Keys Setup](#api-keys-setup) for details.
-
-**Webhook fallback:** If you don't want to run a full bot, set `DISCORD_WEBHOOK_URL` instead. This enables one-way alerts (no slash commands) with zero dependencies — no `discord.js` needed.
-
-**Optional dependency:** The full bot requires `discord.js`. Install it with `npm install discord.js`. If it's not installed, Crucix automatically falls back to webhook-only mode.
-
-### Optional LLM Layer
-Connect any of 8 LLM providers for enhanced analysis:
-- **AI trade ideas** — quantitative analyst producing 5-8 actionable ideas citing specific data
-- **Smarter alert evaluation** — LLM classifies signals into FLASH/PRIORITY/ROUTINE tiers with cross-domain correlation and confidence scoring
-- Providers: Anthropic Claude, OpenAI, Google Gemini, OpenRouter (Unified API), OpenAI Codex (ChatGPT subscription), MiniMax, Mistral, Grok
-- Graceful fallback — when LLM is unavailable, a rule-based engine takes over alert evaluation. LLM failures never crash the sweep cycle.
-
----
-
-## API Keys Setup
-
-Copy `.env.example` to `.env` at the project root:
-
-```bash
-cp .env.example .env
-```
-
-### Required for Best Results (all free)
-
-| Key | Source | How to Get |
-|-----|--------|------------|
-| `FRED_API_KEY` | Federal Reserve Economic Data | [fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) — instant, free |
-| `FIRMS_MAP_KEY` | NASA FIRMS (satellite fire data) | [firms.modaps.eosdis.nasa.gov](https://firms.modaps.eosdis.nasa.gov/api/area/) — instant, free |
-| `EIA_API_KEY` | US Energy Information Administration | [api.eia.gov](https://www.eia.gov/opendata/register.php) — instant, free |
-
-These three unlock the most valuable economic and satellite data. Each takes about 60 seconds to register.
-
-### Optional (enable additional sources)
-
-| Key | Source | How to Get |
-|-----|--------|------------|
-| `ACLED_EMAIL` + `ACLED_PASSWORD` | Armed conflict event data | [acleddata.com/register](https://acleddata.com/register/) — free, OAuth2 |
-| `AISSTREAM_API_KEY` | Maritime AIS vessel tracking | [aisstream.io](https://aisstream.io/) — free |
-| `ADSB_API_KEY` | Unfiltered flight tracking | [RapidAPI](https://rapidapi.com/adsbexchange/api/adsbexchange-com1) — ~$10/mo |
-
-### LLM Provider (optional, for AI-enhanced ideas)
-
-Set `LLM_PROVIDER` to one of: `anthropic`, `openai`, `gemini`, `codex`, `openrouter`, `minimax`, `mistral`, `grok`
-
-| Provider | Key Required | Default Model |
-|----------|-------------|---------------|
-| `anthropic` | `LLM_API_KEY` | claude-sonnet-4-6 |
-| `openai` | `LLM_API_KEY` | gpt-5.4 |
-| `gemini` | `LLM_API_KEY` | gemini-3.1-pro |
-| `openrouter` | `LLM_API_KEY` | openrouter/auto |
-| `codex` | None (uses `~/.codex/auth.json`) | gpt-5.3-codex |
-| `minimax` | `LLM_API_KEY` | MiniMax-M2.5 |
-| `mistral` | `LLM_API_KEY` | mistral-large-latest |
-| `grok` | `LLM_API_KEY` | grok-4-latest |
-
-For Codex, run `npx @openai/codex login` to authenticate via your ChatGPT subscription.
-
-### Telegram Bot + Alerts (optional)
-
-| Key | How to Get |
-|-----|------------|
-| `TELEGRAM_BOT_TOKEN` | Create via [@BotFather](https://t.me/BotFather) on Telegram |
-| `TELEGRAM_CHAT_ID` | Get via [@userinfobot](https://t.me/userinfobot) |
-| `TELEGRAM_CHANNELS` | *(Optional)* Comma-separated extra channel IDs to monitor beyond the 17 built-in channels |
-| `TELEGRAM_POLL_INTERVAL` | *(Optional)* Bot command polling interval in ms (default: 5000) |
-
-### Discord Bot + Alerts (optional)
-
-| Key | How to Get |
-|-----|------------|
-| `DISCORD_BOT_TOKEN` | Create at [Discord Developer Portal](https://discord.com/developers/applications) → Bot → Token |
-| `DISCORD_CHANNEL_ID` | Right-click channel in Discord (Developer Mode on) → Copy Channel ID |
-| `DISCORD_GUILD_ID` | *(Optional)* Right-click server → Copy Server ID. Enables instant slash command registration (otherwise takes up to 1 hour for global commands) |
-| `DISCORD_WEBHOOK_URL` | *(Optional)* Channel Settings → Integrations → Webhooks → New Webhook → Copy URL. Use this for alert-only mode without a bot |
-
-**Discord bot setup:**
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications) and create a new application
-2. Go to **Bot** → click **Reset Token** → copy the token to `DISCORD_BOT_TOKEN`
-3. Under **Privileged Gateway Intents**, enable **Message Content Intent**
-4. Go to **OAuth2** → **URL Generator** → select `bot` + `applications.commands` scopes → select `Send Messages` + `Embed Links` permissions
-5. Copy the generated URL and open it in your browser to invite the bot to your server
-6. Install the dependency: `npm install discord.js`
-
-Alerts work with or without an LLM on both Telegram and Discord. With an LLM configured, signal evaluation is richer and more context-aware. Without one, a deterministic rule engine evaluates signals based on severity, cross-domain correlation, and signal counts.
-
-### Without Any Keys
-
-Crucix still works with zero API keys. 18+ sources require no authentication at all. Sources that need keys return structured errors and the rest of the sweep continues normally.
-
----
-
-## Architecture
-
-```
-crucix/
-├── server.mjs                 # Express dev server (SSE, auto-refresh, LLM, bot commands)
-├── crucix.config.mjs          # Configuration with env var overrides + delta thresholds
-├── diag.mjs                   # Diagnostic script — run if server fails to start
-├── .env.example               # All documented env vars
-├── package.json               # Runtime: express | Optional: discord.js
-├── docs/                      # Screenshots for README
-│
-├── apis/
-│   ├── briefing.mjs           # Master orchestrator — runs all 27 sources in parallel
-│   ├── save-briefing.mjs      # CLI: save timestamped + latest.json
-│   ├── BRIEFING_PROMPT.md     # Intelligence synthesis protocol
-│   ├── BRIEFING_TEMPLATE.md   # Briefing output structure
-│   ├── utils/
-│   │   ├── fetch.mjs          # safeFetch() — timeout, retries, abort, auto-JSON
-│   │   └── env.mjs            # .env loader (no dotenv dependency)
-│   └── sources/               # 27 self-contained source modules
-│       ├── gdelt.mjs          # Each exports briefing() → structured data
-│       ├── fred.mjs           # Can run standalone: node apis/sources/fred.mjs
-│       ├── space.mjs          # CelesTrak satellite tracking
-│       ├── yfinance.mjs       # Yahoo Finance — free live market data
-│       └── ...                # 23 more
-│
-├── dashboard/
-│   ├── inject.mjs             # Data synthesis + standalone HTML injection
-│   └── public/
-│       └── jarvis.html        # Self-contained Jarvis HUD
-│
-├── lib/
-│   ├── llm/                   # LLM abstraction (8 providers, raw fetch, no SDKs)
-│   │   ├── provider.mjs       # Base class
-│   │   ├── anthropic.mjs      # Claude
-│   │   ├── openai.mjs         # GPT
-│   │   ├── gemini.mjs         # Gemini
-│   │   ├── grok.mjs           # Grok
-│   │   ├── openrouter.mjs     # OpenRouter (Unified API)
-│   │   ├── codex.mjs          # Codex (ChatGPT subscription)
-│   │   ├── minimax.mjs        # MiniMax (M2.5, 204K context)
-│   │   ├── mistral.mjs        # Mistral AI
-│   │   ├── ideas.mjs          # LLM-powered trade idea generation
-│   │   └── index.mjs          # Factory: createLLMProvider()
-│   ├── delta/                 # Change tracking between sweeps
-│   │   ├── engine.mjs         # Delta computation — semantic dedup, configurable thresholds, severity scoring
-│   │   ├── memory.mjs         # Hot memory (3 runs, atomic writes) + cold storage (daily archives)
-│   │   └── index.mjs          # Re-exports
-│   └── alerts/
-│       ├── telegram.mjs       # Multi-tier alerts (FLASH/PRIORITY/ROUTINE) + two-way bot commands
-│       └── discord.mjs        # Discord bot (slash commands, rich embeds) + webhook fallback
-│
-└── runs/                      # Runtime data (gitignored)
-    ├── latest.json            # Most recent sweep output
-    └── memory/                # Delta memory (hot.json + cold/YYYY-MM-DD.json)
-```
-
-### Design Principles
-- **Pure ESM** — every file is `.mjs` with explicit imports
-- **Minimal dependencies** — Express is the only runtime dependency. `discord.js` is optional (for Discord bot). LLM providers use raw `fetch()`, no SDKs.
-- **Parallel execution** — `Promise.allSettled()` fires all 27 sources simultaneously
-- **Graceful degradation** — missing keys produce errors, not crashes. LLM failures don't kill sweeps.
-- **Each source is standalone** — run `node apis/sources/gdelt.mjs` to test any source independently
-- **Self-contained dashboard** — the HTML file works with or without the server
-
----
-
-## Data Sources (27)
-
-### Tier 1: Core OSINT & Geopolitical (11)
-
-| Source | What It Tracks | Auth |
-|--------|---------------|------|
-| **GDELT** | Global news events, conflict mapping (100+ languages) | None |
-| **OpenSky** | Real-time ADS-B flight tracking across 6 hotspot regions | None |
-| **NASA FIRMS** | Satellite fire/thermal anomaly detection (3hr latency) | Free key |
-| **Maritime/AIS** | Vessel tracking, dark ships, sanctions evasion | Free key |
-| **Safecast** | Citizen-science radiation monitoring near 6 nuclear sites | None |
-| **ACLED** | Armed conflict events: battles, explosions, protests | Free (OAuth2) |
-| **ReliefWeb** | UN humanitarian crisis tracking | None |
-| **WHO** | Disease outbreaks and health emergencies | None |
-| **OFAC** | US Treasury sanctions (SDN list) | None |
-| **OpenSanctions** | Aggregated global sanctions (30+ sources) | Partial |
-| **ADS-B Exchange** | Unfiltered flight tracking including military | Paid |
-
-### Tier 2: Economic & Financial (7)
-
-| Source | What It Tracks | Auth |
-|--------|---------------|------|
-| **FRED** | 22 key indicators: yield curve, CPI, VIX, fed funds, M2 | Free key |
-| **US Treasury** | National debt, yields, fiscal data | None |
-| **BLS** | CPI, unemployment, nonfarm payrolls, PPI | None |
-| **EIA** | WTI/Brent crude, natural gas, inventories | Free key |
-| **GSCPI** | NY Fed Global Supply Chain Pressure Index | None |
-| **USAspending** | Federal spending and defense contracts | None |
-| **UN Comtrade** | Strategic commodity trade flows between major powers | None |
-
-### Tier 3: Weather, Environment, Tech, Social, SIGINT (7)
-
-| Source | What It Tracks | Auth |
-|--------|---------------|------|
-| **NOAA/NWS** | Active US weather alerts | None |
-| **EPA RadNet** | US government radiation monitoring | None |
-| **USPTO Patents** | Patent filings in 7 strategic tech areas | None |
-| **Bluesky** | Social sentiment on geopolitical/market topics | None |
-| **Reddit** | Social sentiment from key subreddits | OAuth |
-| **Telegram** | 17 curated OSINT/conflict/finance channels (web scraping, expandable via config) | None |
-| **KiwiSDR** | Global HF radio receiver network (~600 receivers) | None |
-
-### Tier 4: Space & Satellites (1)
-
-| Source | What It Tracks | Auth |
-|--------|---------------|------|
-| **CelesTrak** | Satellite launches, ISS tracking, military constellations, Starlink/OneWeb counts | None |
-
-### Tier 5: Live Market Data (1)
-
-| Source | What It Tracks | Auth |
-|--------|---------------|------|
-| **Yahoo Finance** | Real-time prices: SPY, QQQ, BTC, Gold, WTI, VIX + 9 more | None |
-
----
-
-## npm Scripts
-
-| Script | Command | Description |
-|--------|---------|-------------|
-| `npm run dev` | `node --trace-warnings server.mjs` | Start dashboard with auto-refresh |
-| `npm run sweep` | `node apis/briefing.mjs` | Run a single sweep, output JSON to stdout |
-| `npm run inject` | `node dashboard/inject.mjs` | Inject latest data into static HTML |
-| `npm run brief:save` | `node apis/save-briefing.mjs` | Run sweep + save timestamped JSON |
-| `npm run diag` | `node diag.mjs` | Run diagnostics (Node version, imports, port check) |
-
----
-
-## Configuration
-
-All settings are in `.env` with sensible defaults:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3117` | Dashboard server port |
-| `REFRESH_INTERVAL_MINUTES` | `15` | Auto-refresh interval |
-| `LLM_PROVIDER` | disabled | `anthropic`, `openai`, `gemini`, `codex`, `openrouter`, `minimax`, `mistral`, or `grok` |
-| `LLM_API_KEY` | — | API key (not needed for codex) |
-| `LLM_MODEL` | per-provider default | Override model selection |
-| `TELEGRAM_BOT_TOKEN` | disabled | For Telegram alerts + bot commands |
-| `TELEGRAM_CHAT_ID` | — | Your Telegram chat ID |
-| `TELEGRAM_CHANNELS` | — | Extra channel IDs to monitor (comma-separated) |
-| `TELEGRAM_POLL_INTERVAL` | `5000` | Bot command polling interval (ms) |
-| `DISCORD_BOT_TOKEN` | disabled | For Discord alerts + slash commands |
-| `DISCORD_CHANNEL_ID` | — | Discord channel for alerts |
-| `DISCORD_GUILD_ID` | — | Server ID (instant slash command registration) |
-| `DISCORD_WEBHOOK_URL` | — | Webhook URL (alert-only fallback, no bot needed) |
-
-Delta engine thresholds (how sensitive the system is to changes between sweeps) can be customized in `crucix.config.mjs` under the `delta.thresholds` section. The defaults are tuned to filter out noise while catching meaningful moves.
-
----
-
-## API Endpoints
-
-When running `npm run dev`:
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /` | Jarvis HUD dashboard |
-| `GET /api/data` | Current synthesized intelligence data (JSON) |
-| `GET /api/health` | Server status, uptime, source count, LLM status |
-| `GET /events` | SSE stream for live push updates |
-
----
-
-## Troubleshooting
-
-### `npm run dev` exits silently (no output, no error)
-
-This is a known issue where npm's script runner can swallow errors, particularly on Windows PowerShell. Try these in order:
-
-**1. Run Node directly (bypasses npm):**
-```bash
-node --trace-warnings server.mjs
-```
-This is functionally identical to `npm run dev` but gives you full error output.
-
-**2. Run the diagnostic script:**
-```bash
-node diag.mjs
-```
-This tests every import one by one, checks your Node.js version, and verifies port 3117 is available. It will tell you exactly what's failing.
-
-**3. Check if port 3117 is already in use:**
-
-A previous Crucix instance may still be running in the background.
-
-```powershell
-# Windows PowerShell
-netstat -ano | findstr 3117
-taskkill /F /PID <the_PID_from_above>
-
-# Or kill all Node processes
-taskkill /F /IM node.exe
-```
-
-```bash
-# macOS / Linux
-lsof -ti:3117 | xargs kill
-```
-
-Then try starting again. You can also change the port by setting `PORT=3118` in your `.env` file.
-
-**4. Check Node.js version:**
-```bash
-node --version
-```
-Crucix requires Node.js 22 or later. If you have an older version, download the latest LTS from [nodejs.org](https://nodejs.org/).
-
-### Dashboard shows empty panels after first start
-
-This is normal — the first sweep takes 30–60 seconds to query all 27 sources. The dashboard will populate automatically once the sweep completes. Check the terminal for sweep progress logs.
-
-### Some sources show errors
-
-Expected behavior. Sources that require API keys will return structured errors if the key isn't set. The rest of the sweep continues normally. Check the Source Integrity section in the dashboard (or the server logs) to see which sources failed and why. The 3 most impactful free keys to add are `FRED_API_KEY`, `FIRMS_MAP_KEY`, and `EIA_API_KEY`.
-
-OpenSky can also return `HTTP 429` when its public hotspots are queried too aggressively. Crucix does not try to evade that limit. Instead, it surfaces the throttle/error in source health and preserves the most recent non-empty air traffic snapshot from `runs/` so the dashboard flight layer does not suddenly go blank on a throttled sweep.
-
-### Telegram bot not responding to commands
-
-Make sure both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set in `.env`. The bot only responds to messages from the configured chat ID (security measure). You should see `[Crucix] Telegram alerts enabled` and `[Crucix] Bot command polling started` in the server logs on startup. If not, double-check your token with `curl https://api.telegram.org/bot<YOUR_TOKEN>/getMe`.
-
-### Discord bot not responding to slash commands
-
-Check these in order:
-1. Make sure `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` are set in `.env`
-2. Verify `discord.js` is installed: `npm ls discord.js`. If missing, run `npm install discord.js`
-3. If slash commands don't appear, set `DISCORD_GUILD_ID` — without it, global commands can take up to 1 hour to propagate. Guild-specific commands register instantly
-4. Confirm the bot was invited with `bot` + `applications.commands` scopes and has `Send Messages` + `Embed Links` permissions in the target channel
-5. Check server logs for `[Discord] Bot logged in as ...` on startup. If you see `[Discord] discord.js not installed`, install it and restart
-6. **Webhook-only fallback:** If you just want alerts without slash commands, set `DISCORD_WEBHOOK_URL` instead of the bot token. No `discord.js` needed.
-
----
+- **Real-time Threat Visualization** - Interactive threat map and timeline
+- **Severity-based Filtering** - Focus on critical and high-priority threats
+- **Attack Type Classification** - Categorization by MITRE ATT&CK techniques
+- **Geolocation Analysis** - Geographic distribution of threats
+- **Source Health Monitoring** - Real-time status of all intelligence sources
+- **Historical Data** - Track threat evolution over time
 
 ## Screenshots
 
-The `docs/` folder contains dashboard screenshots referenced by this README:
+### Dashboard Overview
+![Dashboard](docs/images/dashboard-overview.png)
 
-| File | Description |
-|------|-------------|
-| `docs/dashboard.png` | Full dashboard — hero image at the top of this README |
-| `docs/boot.png` | Cinematic boot sequence animation |
-| `docs/map.png` | D3 world map with marker types and flight arcs |
-| `docs/globe.png` | 3D WebGL globe view with atmosphere glow and markers |
+### Threat Details
+![Threat Details](docs/images/threat-details.png)
 
-To update them: run the dashboard, wait for a sweep to complete, then use your browser's DevTools (`F12` → `Ctrl+Shift+P` → "Capture full size screenshot") or a tool like [LICEcap](https://www.cockos.com/licecap/) for GIFs.
+### Attack Events Timeline
+![Timeline](docs/images/timeline.png)
 
----
+## Installation
+
+### Prerequisites
+
+- **Node.js** >= 22.0.0
+- **npm** >= 10.0.0
+
+### Quick Start
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/yourusername/kuntur.git
+cd kuntur
+
+# 2. Install dependencies
+npm install
+
+# 3. Configure API keys (optional)
+cp .env.example .env
+# Edit .env with your API keys
+
+# 4. Start the dashboard server
+npm start
+```
+
+The dashboard will be available at `http://localhost:3117`
+
+### Docker Installation
+
+```bash
+# Build the image
+docker build -t kuntur:latest .
+
+# Run the container
+docker run -d \
+  --name kuntur \
+  -p 3117:3117 \
+  --env-file .env \
+  kuntur:latest
+```
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in the project root:
+
+```bash
+# === Server Configuration ===
+PORT=3117
+REFRESH_INTERVAL_MINUTES=15
+
+# === Threat Intelligence API Keys ===
+
+# AbuseIPDB - Get your key at: https://abuseipdb.com/account/api
+ABUSEIPDB_API_KEY=your_key_here
+
+# GreyNoise - Get your key at: https://greynoise.io/account
+GREYNOISE_API_KEY=your_key_here
+
+# OTX AlienVault - Get your key at: https://otx.alienvault.com/api
+OTX_API_KEY=your_key_here
+
+# Shodan - Get your key at: https://shodan.io/member/api
+SHODAN_API_KEY=your_key_here
+
+# Cloudflare Radar - Get token at: dash.cloudflare.com/profile/api-tokens
+CLOUDFLARE_API_TOKEN=your_token_here
+
+# T-Pot Honeypot (Optional - local deployment)
+TPOT_API_URL=http://localhost:64242
+TPOT_API_KEY=your_key_here
+```
+
+### API Key Setup Guide
+
+Detailed instructions for each provider: [docs/API-KEYS-SETUP.md](docs/API-KEYS-SETUP.md)
+
+| API | Free Tier | Sign Up Link |
+|-----|-----------|--------------|
+| AbuseIPDB | 1,000 requests/day | [abuseipdb.com](https://abuseipdb.com) |
+| GreyNoise | 50 requests/week | [greynoise.io](https://greynoise.io) |
+| OTX | 20 requests/minute | [otx.alienvault.com](https://otx.alienvault.com) |
+| Shodan | 100 requests/month | [shodan.io](https://shodan.io) |
+| Cloudflare | Free | [dash.cloudflare.com](https://dash.cloudflare.com) |
+
+## Usage
+
+### Starting the Server
+
+```bash
+# Start the dashboard server
+npm start
+
+# Development mode with trace warnings
+npm run dev
+
+# Clean restart
+npm run fresh-start
+```
+
+### CLI Commands
+
+```bash
+# Run full threat intelligence briefing
+npm run kuntur
+
+# Threat intelligence sources only (6 sources)
+npm run kuntur:threat
+
+# Contextual sources only (4 sources)
+npm run kuntur:context
+
+# Individual source execution
+npm run kuntur:demo          # Demo replay (simulated data)
+npm run kuntur:cisa          # CISA KEV vulnerabilities
+npm run kuntur:abuseipdb     # Malicious IPs
+npm run kuntur:greynoise     # Internet scanning IPs
+npm run kuntur:otx           # OTX threat exchange
+npm run kuntur:shodan        # Exposed devices
+npm run kuntur:tpot          # T-Pot honeypot
+```
+
+### API Endpoints
+
+Once the server is running, you can access:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `http://localhost:3117/` | GET | Dashboard web interface |
+| `http://localhost:3117/api/status` | GET | System status and health |
+| `http://localhost:3117/api/briefing` | GET | Full intelligence briefing |
+| `http://localhost:3117/api/threats` | GET | Threat intelligence data |
+| `http://localhost:3117/api/context` | GET | Contextual data |
+| `http://localhost:3117/api/events` | GET | Attack events data |
+
+### Example API Response
+
+```json
+{
+  "kuntur": {
+    "version": "2.0.0",
+    "timestamp": "2026-07-05T12:00:00Z",
+    "totalDurationMs": 5000,
+    "sourcesQueried": 10,
+    "sourcesOk": 7,
+    "sourcesConfigured": 5,
+    "sourcesUnconfigured": 2,
+    "sourcesFailed": 0
+  },
+  "intelligence": {
+    "signals": [
+      {
+        "severity": "critical",
+        "title": "Critical Threats Detected",
+        "description": "3 critical attack events detected"
+      }
+    ],
+    "attack_events": {
+      "total_events": 45,
+      "bolivia_events": 3,
+      "by_attack_type": {
+        "brute_force": 12,
+        "port_scan": 8,
+        "malware_c2": 5
+      },
+      "by_severity": {
+        "critical": 3,
+        "high": 15,
+        "medium": 20,
+        "low": 7
+      }
+    },
+    "context_data": {
+      "cisa_vulnerabilities": 1631,
+      "cisa_recent_additions": 23,
+      "who_outbreaks": 5,
+      "noaa_severe_alerts": 12
+    }
+  }
+}
+```
+
+## Intelligence Sources
+
+### Threat Intelligence Sources (6)
+
+| Source | Description | API Key | Status |
+|--------|-------------|---------|--------|
+| **DemoReplay** | Simulated data for demos | Not needed | ✅ Always available |
+| **T-Pot** | Honeypot T-Pot (local) | Optional | ⚠️ Requires installation |
+| **AbuseIPDB** | Reported malicious IPs | Free | ✅ Requires key |
+| **GreyNoise** | Internet scanning IPs | Free | ✅ Requires key |
+| **OTX** | Community threat intel | Free | ✅ Requires key |
+| **Shodan** | Exposed devices | Free | ✅ Requires key |
+
+### Contextual Sources (4)
+
+| Source | Description | API Key | Status |
+|--------|-------------|---------|--------|
+| **CISA-KEV** | Actively exploited vulnerabilities | No | ✅ Always available |
+| **Cloudflare-Radar** | Internet outages & anomalies | Free | ⚠️ Requires key |
+| **WHO** | Disease outbreaks | No | ✅ Always available |
+| **NOAA/NWS** | Severe weather alerts (US) | No | ✅ Always available |
+
+### Attack Types Detected
+
+| Type | Description | MITRE ID |
+|------|-------------|----------|
+| `port_scan` | Port scanning | T1595 |
+| `brute_force` | Brute force attack | T1110 |
+| `malware_c2` | Malware/C2 | T1071 |
+| `ddos` | DDoS attack | T1498 |
+| `exploit_attempt` | Exploit attempt | T1190 |
+| `recon` | Reconnaissance | T1590 |
+| `exfiltration` | Data exfiltration | T1041 |
+| `sql_injection` | SQL injection | T1190 |
+| `web_attack` | Web attack | T1190 |
+| `impersonation` | Impersonation | T1596 |
+
+## Project Structure
+
+```
+kuntur/
+├── apis/
+│   ├── briefing.mjs              # Main orchestrator
+│   ├── sources/
+│   │   ├── demo-replay.mjs       # Simulated data
+│   │   ├── cisa-kev.mjs          # CISA vulnerabilities
+│   │   ├── abuseipdb.mjs         # Malicious IPs
+│   │   ├── greynoise.mjs         # Internet scanning IPs
+│   │   ├── otx.mjs               # Threat exchange
+│   │   ├── shodan.mjs            # Exposed devices
+│   │   ├── tpot.mjs              # Honeypot
+│   │   ├── cloudflare-radar.mjs  # Internet outages
+│   │   ├── who.mjs               # Disease outbreaks
+│   │   └── noaa.mjs              # Weather alerts
+│   └── utils/
+│       ├── fetch.mjs             # HTTP utilities
+│       └── env.mjs               # Environment variables
+├── dashboard/
+│   ├── inject.mjs                # Dashboard data injector
+│   ├── kuntur-synth.mjs          # Kuntur synthesizer
+│   └── public/                   # Static assets
+├── docs/
+│   └── API-KEYS-SETUP.md         # API keys guide
+├── lib/
+│   └── geoip/                    # GeoIP utilities
+├── schemas/
+│   └── attack-event.schema.json  # Event schema
+├── scripts/
+│   └── clean.mjs                 # Cleanup script
+├── server.mjs                    # Main server
+├── package.json
+├── .env.example                  # Environment template
+└── README.md
+```
+
+## Development
+
+### Adding a New Intelligence Source
+
+Each source should:
+
+1. Export a `briefing()` function returning structured data
+2. Handle upstream errors and rate limits cleanly
+3. Degrade gracefully when API keys are missing
+4. Not break the full sweep if it fails
+5. Document required environment variables
+6. Explain why it improves signal quality
+
+### Source Template
+
+```javascript
+// apis/sources/your-source.mjs
+export async function briefing(env) {
+  const API_KEY = env.YOUR_API_KEY;
+
+  if (!API_KEY) {
+    return {
+      source: 'YourSource',
+      status: 'configured: false',
+      data: null,
+      error: 'API key not configured'
+    };
+  }
+
+  try {
+    const response = await fetch('https://api.example.com/data', {
+      headers: { 'Authorization': `Bearer ${API_KEY}` }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    return {
+      source: 'YourSource',
+      status: 'ok',
+      data: processData(data),
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    return {
+      source: 'YourSource',
+      status: 'error',
+      data: null,
+      error: error.message
+    };
+  }
+}
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test suite
+npm run test:unit
+npm run test:integration
+```
 
 ## Contributing
 
-Found a bug? Want to add a 28th source? PRs welcome. Each source is a standalone module in `apis/sources/` — just export a `briefing()` function that returns structured data and add it to the orchestrator in `apis/briefing.mjs`.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-If you find this useful, a star helps others find it too.
+### Quick Contribution Guidelines
 
-For contribution guidelines, review expectations, and source-add rules, see `CONTRIBUTING.md`. For security reports, see `SECURITY.md`.
+- Keep PRs focused and scoped
+- Add new sources in `apis/sources/`
+- Handle errors gracefully
+- Update documentation for API keys
+- Include screenshots for UI changes
+- Follow AGPL-3.0 licensing
+- Test your changes locally before submitting
 
-## Contact
+### Contribution Areas
 
-For partnerships, integrations, or other non-issue inquiries, you can reach me at `celesthioailabs@gmail.com`.
-
-For bugs and feature requests, please use GitHub Issues so discussion stays visible and actionable.
-
----
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=calesthio%2FCrucix&type=date&legend=top-left">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=calesthio/Crucix&type=date&theme=dark&legend=top-left" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=calesthio/Crucix&type=date&legend=top-left" />
-    <img alt="Star History Chart" src="https://api.star-history.com/image?repos=calesthio/Crucix&type=date&legend=top-left" />
-  </picture>
-</a>
-
----
+- **New Intelligence Sources** - Add additional threat intelligence feeds
+- **Dashboard Improvements** - Enhance visualization and user experience
+- **Bug Fixes** - Help identify and fix issues
+- **Documentation** - Improve guides and API documentation
+- **Testing** - Add test coverage for core functionality
 
 ## License
 
-AGPL-3.0
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+
+See [LICENSE](LICENSE) for the full license text.
+
+### What AGPL-3.0 Means
+
+- You are free to use, modify, and distribute this software
+- Modifications must be open-sourced under the same license
+- If you run it as a network service, users must be able to access the source
+- This ensures the community benefits from improvements
+
+## Acknowledgments
+
+Kuntur integrates data from several excellent threat intelligence and data sources:
+
+### Threat Intelligence Sources
+
+- **[AbuseIPDB](https://abuseipdb.com/)** - Malicious IP address database
+- **[GreyNoise](https://greynoise.io/)** - Internet scanning intelligence
+- **[AlienVault OTX](https://otx.alienvault.com/)** - Open threat exchange
+- **[Shodan](https://shodan.io/)** - Internet-connected devices search engine
+- **[T-Pot](https://github.com/telekom-security/tpotce)** - Honeypot toolkit
+- **[CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)** - Known exploited vulnerabilities catalog
+
+### Contextual Sources
+
+- **[Cloudflare Radar](https://radar.cloudflare.com/)** - Internet traffic and outages
+- **[WHO](https://www.who.int/)** - World Health Organization data
+- **[NOAA/NWS](https://www.weather.gov/)** - National Weather Service alerts
+
+### MITRE ATT&CK
+
+Attack type mapping uses the **[MITRE ATT&CK](https://attack.mitre.org/)** framework.
+
+### Built With
+
+- **Node.js** - JavaScript runtime
+- **Express** - Web framework
+- **AJV** - JSON schema validation
+- **MaxMind GeoIP2** - IP geolocation
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/yourusername/kuntur/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yourusername/kuntur/discussions)
+- **Security**: See [SECURITY.md](SECURITY.md) for vulnerability reporting
+
+## Roadmap
+
+- [ ] Webhook notifications for critical threats
+- [ ] Historical threat analysis
+- [ ] Custom threat feed integrations
+- [ ] Multi-language dashboard support
+- [ ] Mobile dashboard view
+- [ ] Threat correlation engine
+- [ ] Machine learning-based threat prediction
+- [ ] Community threat sharing network
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/image?repos=yourusername/kuntur&type=date)](https://star-history.com/#yourusername/kuntur&Date)
+
+---
+
+**Made with ❤️ for the cybersecurity community**
+
+*Kuntur - The Condor Soars High to Watch Over Your Digital Realm*
